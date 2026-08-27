@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="description" content="Experiência de Realidade Aumentada — aponte a câmera para a imagem alvo e veja o conteúdo ganhar vida." />
+    <title>WebAR — Realidade Aumentada</title>
+
+    <!-- ═══════════════════════════════════════════════════
+         CDN — A-Frame e MindAR Image Tracking (versões estáveis)
+    ════════════════════════════════════════════════════ -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <style>
+      /* ═══════════════════════════════════
+         Reset & Base — fonte obrigatoriamente sans-serif
+      ═══════════════════════════════════ */
+      *, *::before, *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      }
+
+      /* ═══════════════════════════════════
+         Camada de UI sobreposta à cena AR
+      ═══════════════════════════════════ */
+      #ui-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        pointer-events: none;          /* deixa toque passar para a cena */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        padding-bottom: 48px;
+      }
+
+      /* ═══════════════════════════════════
+         Botão "Tocar Vídeo"
+      ═══════════════════════════════════ */
+      #btn-play {
+        display: none;                 /* ocultado até targetFound */
+        pointer-events: all;
+        cursor: pointer;
+
+        /* Tamanho e espaçamento */
+        padding: 16px 44px;
+        border: none;
+        border-radius: 50px;
+
+        /* Gradiente vibrante moderno */
+        background: linear-gradient(135deg, #7c3aed 0%, #db2777 100%);
+        color: #fff;
+
+        /* Tipografia sans-serif limpa */
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        font-size: 1.1rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+
+        /* Sombra e profundidade */
+        box-shadow:
+          0 8px 32px rgba(124, 58, 237, 0.55),
+          0 2px 8px rgba(0, 0, 0, 0.35);
+
+        /* Transições suaves */
+        transition:
+          transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+          box-shadow 0.18s ease,
+          opacity 0.25s ease;
+
+        /* Animação de entrada pulsante */
+        animation: pulse-glow 2.4s ease-in-out infinite;
+      }
+
+      #btn-play:hover {
+        transform: scale(1.07);
+        box-shadow:
+          0 14px 40px rgba(124, 58, 237, 0.70),
+          0 4px 12px rgba(0, 0, 0, 0.40);
+      }
+
+      #btn-play:active {
+        transform: scale(0.96);
+      }
+
+      /* Ícone play inline */
+      #btn-play::before {
+        content: "▶  ";
+        font-size: 0.95em;
+      }
+
+      /* Animação de brilho pulsante */
+      @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 8px 32px rgba(124, 58, 237, 0.55), 0 2px 8px rgba(0,0,0,0.35); }
+        50%       { box-shadow: 0 12px 44px rgba(219, 39, 119, 0.75), 0 4px 14px rgba(0,0,0,0.40); }
+      }
+
+      /* ═══════════════════════════════════
+         Dica de instrução no topo
+      ═══════════════════════════════════ */
+      #hint {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 9998;
+        padding: 14px 24px;
+        text-align: center;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.92);
+        letter-spacing: 0.02em;
+
+        /* Fundo glassmorphism */
+        background: linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0.72) 0%,
+          rgba(0, 0, 0, 0) 100%
+        );
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+
+        transition: opacity 0.5s ease;
+      }
+
+      #hint.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      /* ═══════════════════════════════════
+         Garantir que a cena A-Frame ocupe tudo
+      ═══════════════════════════════════ */
+      a-scene {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+      }
+    </style>
+  </head>
+
+  <body>
+
+    <!-- ═══════════════════════════════════════════════════
+         UI Overlay — fora da cena A-Frame para controle total
+    ════════════════════════════════════════════════════ -->
+    <div id="hint">📷 Aponte a câmera para a imagem alvo</div>
+
+    <div id="ui-overlay">
+      <button id="btn-play" aria-label="Tocar vídeo de realidade aumentada">
+        Tocar Vídeo
+      </button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         CENA AR — MindAR + A-Frame
+         • mindar-image: aponta para o arquivo de rastreamento
+         • vr-mode-ui: desativa botão VR padrão
+         • device-orientation-permission-ui: desativa pop-up de orientação
+    ════════════════════════════════════════════════════ -->
+    <a-scene
+      mindar-image="imageTargetSrc: ./assets/alvo.mind; autoStart: true; uiScanning: yes;"
+      color-space="sRGB"
+      renderer="colorManagement: true; physicallyCorrectLights: true"
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false"
+    >
+
+      <!-- ─── Assets ─────────────────────────────────────
+           • playsinline + webkit-playsinline: obrigatório para iOS
+           • loop e muted desativados para controle manual
+      ──────────────────────────────────────────────── -->
+      <a-assets>
+        <video
+          id="ar-video"
+          src="./assets/video.mp4"
+          playsinline
+          webkit-playsinline
+          preload="auto"
+          crossorigin="anonymous"
+        ></video>
+      </a-assets>
+
+      <!-- ─── Câmera ──────────────────────────────────── -->
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <!-- ─── Entidade Alvo (targetIndex: 0) ───────────
+           O <a-video> é posicionado e dimensionado sobre
+           a imagem alvo detectada pelo MindAR.
+           Ajuste width/height conforme a proporção do seu vídeo.
+      ──────────────────────────────────────────────── -->
+      <a-entity id="target-entity" mindar-image-target="targetIndex: 0">
+        <a-video
+          id="ar-video-plane"
+          src="#ar-video"
+          position="0 0 0"
+          rotation="0 0 0"
+          width="1"
+          height="0.5625"
+        ></a-video>
+      </a-entity>
+
+    </a-scene>
+
+    <!-- ═══════════════════════════════════════════════════
+         LÓGICA JAVASCRIPT
+    ════════════════════════════════════════════════════ -->
+    <script>
+      'use strict';
+
+      // ── Referências aos elementos ──────────────────────
+      const btnPlay    = document.getElementById('btn-play');
+      const arVideo    = document.getElementById('ar-video');
+      const targetEl   = document.getElementById('target-entity');
+      const hintEl     = document.getElementById('hint');
+
+      // ── Evento: imagem alvo ENCONTRADA ────────────────
+      // Exibe o botão de reprodução para o usuário iniciar o vídeo
+      targetEl.addEventListener('targetFound', () => {
+        console.log('[MindAR] Alvo encontrado.');
+
+        // Esconde a dica de busca
+        hintEl.classList.add('hidden');
+
+        // Exibe o botão de play
+        btnPlay.style.display = 'block';
+      });
+
+      // ── Evento: imagem alvo PERDIDA ───────────────────
+      // Pausa o vídeo e oculta o botão
+      targetEl.addEventListener('targetLost', () => {
+        console.log('[MindAR] Alvo perdido.');
+
+        // Pausa o vídeo
+        if (!arVideo.paused) {
+          arVideo.pause();
+        }
+
+        // Oculta o botão de play
+        btnPlay.style.display = 'none';
+
+        // Reexibe a dica de busca
+        hintEl.classList.remove('hidden');
+      });
+
+      // ── Evento: clique no botão "Tocar Vídeo" ─────────
+      // Dá play no vídeo e oculta o próprio botão da tela
+      btnPlay.addEventListener('click', () => {
+        arVideo.play()
+          .then(() => {
+            console.log('[AR] Vídeo iniciado com sucesso.');
+          })
+          .catch((err) => {
+            console.warn('[AR] Erro ao iniciar vídeo:', err);
+          });
+
+        // Oculta o botão após o clique
+        btnPlay.style.display = 'none';
+      });
+    </script>
+
+  </body>
+</html>
