@@ -9,7 +9,7 @@
     <!-- ═══════════════════════════════════════════════════
          CDN — A-Frame e MindAR Image Tracking (versões estáveis)
     ════════════════════════════════════════════════════ -->
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
@@ -190,6 +190,7 @@
           src="./assets/video.mp4"
           playsinline
           webkit-playsinline
+          muted
           preload="auto"
           crossorigin="anonymous"
         ></video>
@@ -260,6 +261,10 @@
       // ── Evento: clique no botão "Tocar Vídeo" ─────────
       // Dá play no vídeo e oculta o próprio botão da tela
       btnPlay.addEventListener('click', () => {
+        // Desativa o mudo ANTES do play para restaurar o áudio
+        // após a interação do usuário (contorna política de autoplay)
+        arVideo.muted = false;
+
         arVideo.play()
           .then(() => {
             console.log('[AR] Vídeo iniciado com sucesso.');
