@@ -3,23 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <meta name="description" content="Experiência de Realidade Aumentada — aponte a câmera para a imagem alvo e veja o conteúdo ganhar vida." />
+    <meta name="description" content="Realidade Aumentada — aponte a câmera para a imagem do produto." />
     <title>WebAR — Realidade Aumentada</title>
 
-    <!--
-      ORDEM DE IMPORTAÇÃO OBRIGATÓRIA:
-      1. A-Frame primeiro
-      2. MindAR depois (registra componentes no A-Frame já carregado)
-    -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
-      /* ─── Reset mínimo ────────────────────────────────
-         NÃO sobrescrever video, canvas ou elementos do MindAR.
-         O MindAR injeta um <video> de câmera com estilos inline
-         — qualquer override nosso pode torná-lo invisível.
-      ─────────────────────────────────────────────── */
+      /* ═══════════════════════════════════════════════
+         BASE — fonte sans-serif obrigatória, fundo neutro
+      ═══════════════════════════════════════════════ */
       *, *::before, *::after {
         box-sizing: border-box;
         margin: 0;
@@ -29,23 +22,25 @@
       html, body {
         width: 100%;
         height: 100%;
-        background: #000;
+        /* TRANSPARENTE — qualquer cor aqui aparece
+           por trás do canvas e pode mascarar a câmera */
+        background: transparent;
         font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        overflow: hidden;
       }
 
-      /* ─── Força GPU layer no vídeo de câmera do MindAR ──
-         O MindAR injeta o vídeo sem transform — em alguns
-         Androids o frame de câmera não atualiza sem GPU layer.
-      ─────────────────────────────────────────────── */
-      video {
-        -webkit-transform: translateZ(0);
-        transform: translateZ(0);
+      /*
+        CANVAS TRANSPARENTE — obrigatório para o vídeo
+        da câmera injetado pelo MindAR aparecer por trás.
+        Sem isso, o canvas fica preto opaco.
+      */
+      canvas {
+        background-color: transparent !important;
       }
 
-      /* ─── TELA DE INÍCIO ──────────────────────────────
-         Exibida antes do AR iniciar.
-         Garante interação do usuário antes de pedir câmera.
-      ─────────────────────────────────────────────── */
+      /* ═══════════════════════════════════════════════
+         TELA DE INÍCIO
+      ═══════════════════════════════════════════════ */
       #start-screen {
         position: fixed;
         inset: 0;
@@ -58,8 +53,8 @@
         padding: 40px 32px;
         background: radial-gradient(
           ellipse at 60% 30%,
-          rgba(124, 58, 237, 0.22) 0%,
-          rgba(10, 10, 15, 0.98) 70%
+          rgba(124, 58, 237, 0.25) 0%,
+          rgba(8, 8, 14, 0.97) 70%
         );
         text-align: center;
       }
@@ -73,13 +68,19 @@
         align-items: center;
         justify-content: center;
         font-size: 2.8rem;
-        box-shadow: 0 0 0 8px rgba(124,58,237,0.15), 0 0 0 16px rgba(124,58,237,0.07);
+        box-shadow:
+          0 0 0 8px rgba(124, 58, 237, 0.15),
+          0 0 0 16px rgba(124, 58, 237, 0.07);
         animation: ring-pulse 3s ease-in-out infinite;
       }
 
       @keyframes ring-pulse {
-        0%,100% { box-shadow: 0 0 0 8px rgba(124,58,237,0.15), 0 0 0 16px rgba(124,58,237,0.07); }
-        50%      { box-shadow: 0 0 0 14px rgba(219,39,119,0.20), 0 0 0 26px rgba(219,39,119,0.06); }
+        0%, 100% {
+          box-shadow: 0 0 0 8px rgba(124,58,237,0.15), 0 0 0 16px rgba(124,58,237,0.07);
+        }
+        50% {
+          box-shadow: 0 0 0 14px rgba(219,39,119,0.20), 0 0 0 26px rgba(219,39,119,0.07);
+        }
       }
 
       #start-screen h1 {
@@ -92,8 +93,8 @@
 
       #start-screen p {
         font-size: 0.95rem;
-        color: rgba(255,255,255,0.60);
-        line-height: 1.6;
+        color: rgba(255, 255, 255, 0.58);
+        line-height: 1.65;
         max-width: 280px;
         font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
       }
@@ -110,30 +111,33 @@
         letter-spacing: 0.05em;
         text-transform: uppercase;
         cursor: pointer;
-        box-shadow: 0 8px 30px rgba(124,58,237,0.55);
-        transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), opacity 0.2s;
+        box-shadow: 0 8px 30px rgba(124, 58, 237, 0.55);
+        transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s;
+        -webkit-tap-highlight-color: transparent;
       }
 
-      #btn-start-ar:active { transform: scale(0.95); }
-      #btn-start-ar:hover  { transform: scale(1.05); }
-      #btn-start-ar:disabled { opacity: 0.5; pointer-events: none; }
+      #btn-start-ar:active   { transform: scale(0.95); }
+      #btn-start-ar:hover    { transform: scale(1.05); }
+      #btn-start-ar:disabled { opacity: 0.55; pointer-events: none; }
 
       #loading-msg {
         font-size: 0.85rem;
-        color: rgba(255,255,255,0.50);
+        color: rgba(255, 255, 255, 0.48);
         font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
         display: none;
         animation: fade-blink 1.4s ease-in-out infinite;
       }
 
-      #loading-msg.visible { display: block; }
+      #loading-msg.show { display: block; }
 
       @keyframes fade-blink {
-        0%,100% { opacity: 0.4; }
-        50%     { opacity: 1; }
+        0%, 100% { opacity: 0.35; }
+        50%       { opacity: 1; }
       }
 
-      /* ─── UI AR ───────────────────────────────────────── */
+      /* ═══════════════════════════════════════════════
+         UI AR — visível após câmera iniciar
+      ═══════════════════════════════════════════════ */
       #ui-overlay {
         position: fixed;
         inset: 0;
@@ -160,9 +164,10 @@
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        box-shadow: 0 8px 32px rgba(124,58,237,0.55), 0 2px 8px rgba(0,0,0,0.35);
-        transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1);
+        box-shadow: 0 8px 32px rgba(124, 58, 237, 0.55), 0 2px 8px rgba(0,0,0,0.35);
+        transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
         animation: pulse-glow 2.4s ease-in-out infinite;
+        -webkit-tap-highlight-color: transparent;
       }
 
       #btn-play::before { content: "▶  "; font-size: 0.95em; }
@@ -170,8 +175,8 @@
       #btn-play:active  { transform: scale(0.96); }
 
       @keyframes pulse-glow {
-        0%,100% { box-shadow: 0 8px 32px rgba(124,58,237,0.55), 0 2px 8px rgba(0,0,0,0.35); }
-        50%     { box-shadow: 0 12px 44px rgba(219,39,119,0.75), 0 4px 14px rgba(0,0,0,0.40); }
+        0%, 100% { box-shadow: 0 8px 32px rgba(124,58,237,0.55), 0 2px 8px rgba(0,0,0,0.35); }
+        50%       { box-shadow: 0 12px 44px rgba(219,39,119,0.75), 0 4px 14px rgba(0,0,0,0.40); }
       }
 
       #hint {
@@ -183,7 +188,7 @@
         font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
         font-size: 0.9rem;
         font-weight: 500;
-        color: rgba(255,255,255,0.92);
+        color: rgba(255, 255, 255, 0.92);
         letter-spacing: 0.02em;
         background: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0) 100%);
         backdrop-filter: blur(4px);
@@ -194,15 +199,16 @@
 
       #hint.hidden { opacity: 0; pointer-events: none; }
 
-      /* ─── Tela de erro ────────────────────────────────── */
-      #error-msg {
+      /* ═══════════════════════════════════════════════
+         TELA DE ERRO
+      ═══════════════════════════════════════════════ */
+      #error-screen {
         position: fixed;
         inset: 0;
         z-index: 999999;
-        background: rgba(10,10,15,0.97);
+        background: rgba(8, 8, 14, 0.97);
         color: #fff;
         font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-        font-size: 1rem;
         text-align: center;
         padding: 40px 32px;
         flex-direction: column;
@@ -213,14 +219,14 @@
         display: none;
       }
 
-      #error-msg.visible { display: flex; }
-      #error-msg .icon   { font-size: 2.5rem; }
-      #error-msg strong  { font-size: 1.2rem; }
+      #error-screen.show  { display: flex; }
+      #error-screen .icon { font-size: 2.5rem; }
+      #error-screen strong { font-size: 1.15rem; }
 
       #btn-retry {
-        margin-top: 12px;
+        margin-top: 8px;
         padding: 12px 32px;
-        border: 1px solid rgba(255,255,255,0.25);
+        border: 1px solid rgba(255,255,255,0.22);
         border-radius: 50px;
         background: transparent;
         color: #fff;
@@ -233,7 +239,7 @@
 
   <body>
 
-    <!-- TELA DE INÍCIO ────────────────────────────────── -->
+    <!-- TELA DE INÍCIO -->
     <div id="start-screen">
       <div class="logo-ring">📦</div>
       <h1>Realidade Aumentada</h1>
@@ -242,34 +248,47 @@
       <span id="loading-msg">Abrindo câmera…</span>
     </div>
 
-    <!-- TELA DE ERRO ──────────────────────────────────── -->
-    <div id="error-msg">
+    <!-- TELA DE ERRO -->
+    <div id="error-screen">
       <span class="icon">⚠️</span>
-      <strong>Não foi possível acessar a câmera</strong>
-      <p id="error-detail">Verifique as permissões do navegador e certifique-se de estar usando HTTPS.</p>
+      <strong>Câmera indisponível</strong>
+      <p id="error-detail">Verifique as permissões e certifique-se de usar HTTPS.</p>
       <button id="btn-retry" onclick="location.reload()">↺ Tentar novamente</button>
     </div>
 
-    <!-- UI AR ─────────────────────────────────────────── -->
+    <!-- UI AR -->
     <div id="hint">📷 Aponte a câmera para a imagem alvo</div>
-
     <div id="ui-overlay">
-      <button id="btn-play" aria-label="Tocar vídeo de realidade aumentada">
-        Tocar Vídeo
-      </button>
+      <button id="btn-play" aria-label="Tocar vídeo">Tocar Vídeo</button>
     </div>
 
     <!--
-      CENA AR ─────────────────────────────────────────────
-      • autoStart: false  → câmera só abre após interação
-      • color-space + renderer com alpha:true → canvas WebGL
-        transparente + pipeline oficial do MindAR
-      • alpha: true → OBRIGATÓRIO para o feed da câmera
-        aparecer por trás do canvas WebGL
-    ─────────────────────────────────────────────────── -->
+    ═══════════════════════════════════════════════════════
+      CENA AR
+
+      CORREÇÕES APLICADAS (baseadas em issues oficiais MindAR):
+
+      ① embedded — OBRIGATÓRIO para o MindAR posicionar
+        corretamente o canvas e o vídeo de câmera em mobile.
+        Sem ele, o canvas fica desalinhado e a câmera não aparece.
+
+      ② uiLoading:no; uiError:no; uiScanning:no — os overlays
+        padrão do MindAR interferem no loop de renderização
+        e causam tela preta em alguns dispositivos Android.
+        Usamos nossa própria UI no lugar.
+
+      ③ renderer="alpha:true" — torna o canvas WebGL transparente
+        para o vídeo de câmera aparecer por trás.
+
+      ④ autoStart: false + botão manual — garante que o
+        getUserMedia só é chamado após gesto do usuário,
+        evitando bloqueio de câmera em mobile.
+    ═══════════════════════════════════════════════════════
+    -->
     <a-scene
       id="ar-scene"
-      mindar-image="imageTargetSrc: ./assets/alvo.mind; autoStart: false; uiScanning: yes;"
+      mindar-image="imageTargetSrc: ./assets/alvo.mind; autoStart: false; uiLoading: no; uiError: no; uiScanning: no;"
+      embedded
       color-space="sRGB"
       renderer="colorManagement: true; physicallyCorrectLights: true; alpha: true"
       vr-mode-ui="enabled: false"
@@ -278,12 +297,11 @@
 
       <a-assets>
         <!--
-          CORREÇÕES DO VÍDEO:
-          ① crossorigin REMOVIDO — bloqueava a textura WebGL quando
-            o servidor não envia headers CORS (causa retângulo preto)
-          ② muted MANTIDO — necessário para contornar bloqueio de
-            autoplay em mobile (mudo é removido no clique do usuário)
-          ③ playsinline + webkit-playsinline — obrigatório para iOS
+          VÍDEO DO CONTEÚDO AR:
+          • muted: contorna bloqueio de autoplay no mobile
+          • playsinline + webkit-playsinline: exibição inline (iOS)
+          • SEM crossorigin: evita bloqueio de textura WebGL por CORS
+          • preload="auto": pré-carrega para reduzir delay na reprodução
         -->
         <video
           id="ar-video"
@@ -299,17 +317,18 @@
 
       <a-entity id="target-entity" mindar-image-target="targetIndex: 0">
         <!--
-          <a-plane> com material é mais compatível com mobile
-          do que <a-video> para atualização de textura WebGL
+          Proporção 16:9 → height="0.5625"
+          Ajuste se seu vídeo for 4:3 → height="0.75"
+                              ou 1:1 → height="1"
         -->
-        <a-plane
-          id="ar-video-plane"
-          material="src: #ar-video; shader: flat; side: double"
+        <a-video
+          id="ar-video-el"
+          src="#ar-video"
           position="0 0 0"
           rotation="0 0 0"
           width="1"
           height="0.5625"
-        ></a-plane>
+        ></a-video>
       </a-entity>
 
     </a-scene>
@@ -317,11 +336,11 @@
     <script>
       'use strict';
 
-      /* ── Referências ─────────────────────────────────── */
+      /* ── Referências DOM ──────────────────────────────── */
       const startScreen = document.getElementById('start-screen');
       const btnStartAR  = document.getElementById('btn-start-ar');
       const loadingMsg  = document.getElementById('loading-msg');
-      const errorMsg    = document.getElementById('error-msg');
+      const errorScreen = document.getElementById('error-screen');
       const errorDetail = document.getElementById('error-detail');
       const hintEl      = document.getElementById('hint');
       const btnPlay     = document.getElementById('btn-play');
@@ -329,108 +348,97 @@
       const sceneEl     = document.getElementById('ar-scene');
       const targetEl    = document.getElementById('target-entity');
 
-      /* ── Botão INICIAR AR ──────────────────────────────
-         Garante a interação do usuário ANTES de pedir câmera.
-         Resolve bloqueio de câmera em navegadores mobile.
-      ─────────────────────────────────────────────────── */
+      /* ── Iniciar AR ao clicar ─────────────────────────── */
       btnStartAR.addEventListener('click', () => {
         btnStartAR.disabled = true;
-        loadingMsg.classList.add('visible');
+        loadingMsg.classList.add('show');
 
-        const tentarIniciar = () => {
-          const arSystem = sceneEl.systems['mindar-image-system'];
-          if (!arSystem) {
-            setTimeout(tentarIniciar, 200);
-            return;
-          }
-          arSystem.start();
+        const iniciar = () => {
+          const sys = sceneEl.systems['mindar-image-system'];
+          if (!sys) { setTimeout(iniciar, 150); return; }
+          sys.start();
         };
 
-        if (sceneEl.hasLoaded) {
-          tentarIniciar();
-        } else {
-          sceneEl.addEventListener('loaded', tentarIniciar, { once: true });
+        sceneEl.hasLoaded ? iniciar() : sceneEl.addEventListener('loaded', iniciar, { once: true });
+      });
+
+      /* ── Câmera ativa com sucesso ─────────────────────── */
+      sceneEl.addEventListener('arReady', () => {
+        startScreen.style.display = 'none';
+        hintEl.style.display      = 'block';
+
+        /*
+          Garante que o vídeo de câmera injetado pelo MindAR
+          está visível e com GPU layer ativo.
+          O MindAR posiciona o vídeo com estilos inline, mas em
+          alguns Android Chrome os frames não atualizam sem
+          translateZ(0) forçado.
+        */
+        document.querySelectorAll('video').forEach(v => {
+          if (v.id !== 'ar-video') {
+            v.setAttribute('playsinline', '');
+            v.setAttribute('webkit-playsinline', '');
+            v.style.display         = 'block';
+            v.style.visibility      = 'visible';
+            v.style.opacity         = '1';
+            v.style.webkitTransform = 'translateZ(0)';
+            v.style.transform       = 'translateZ(0)';
+            v.style.willChange      = 'transform';
+            if (v.paused) v.play().catch(() => {});
+          }
+        });
+
+        /*
+          Força o renderer WebGL a usar fundo transparente.
+          Garante que mesmo que o atributo renderer="alpha:true"
+          seja processado depois da criação do contexto,
+          o clear color seja transparente.
+        */
+        const renderer = sceneEl.renderer;
+        if (renderer) {
+          renderer.setClearColor(0x000000, 0);
         }
       });
 
-      /* ── arReady: câmera iniciou com sucesso ──────────── */
-      sceneEl.addEventListener('arReady', () => {
-        console.log('[MindAR] Câmera ativa.');
-
-        // Esconde tela de início
-        startScreen.style.display = 'none';
-        hintEl.style.display = 'block';
-
-        /*
-          CORREÇÃO DE CÂMERA PRETA:
-          O MindAR injeta um <video> no DOM para o feed da câmera.
-          Em alguns Android Chrome, esse vídeo não atualiza os frames
-          sem um reflow/repaint forçado. Aplicamos estilos explícitos
-          e forçamos GPU layer via translateZ(0).
-        */
-        setTimeout(() => {
-          document.querySelectorAll('video').forEach(v => {
-            if (v.id !== 'ar-video') {
-              // É o vídeo de câmera do MindAR
-              v.style.display    = 'block';
-              v.style.visibility = 'visible';
-              v.style.opacity    = '1';
-              v.style.webkitTransform = 'translateZ(0)';
-              v.style.transform  = 'translateZ(0)';
-              // Força repaint
-              v.style.willChange = 'transform';
-              // Garante que está tocando
-              if (v.paused) v.play().catch(() => {});
-            }
-          });
-        }, 300);
-      });
-
-      /* ── arError: câmera falhou ─────────────────────── */
+      /* ── Erro de câmera ───────────────────────────────── */
       sceneEl.addEventListener('arError', (e) => {
-        console.error('[MindAR] Erro:', e);
         startScreen.style.display = 'none';
         errorDetail.textContent =
-          (e.detail?.message) ||
-          'Permissão negada ou câmera em uso por outro aplicativo.';
-        errorMsg.classList.add('visible');
+          (e.detail?.message) || 'Permissão negada ou câmera em uso por outro app.';
+        errorScreen.classList.add('show');
       });
 
-      /* ── targetFound ─────────────────────────────────── */
+      /* ── Alvo encontrado ──────────────────────────────── */
       targetEl.addEventListener('targetFound', () => {
-        console.log('[MindAR] Alvo encontrado.');
         hintEl.classList.add('hidden');
         btnPlay.style.display = 'block';
       });
 
-      /* ── targetLost ──────────────────────────────────── */
+      /* ── Alvo perdido ─────────────────────────────────── */
       targetEl.addEventListener('targetLost', () => {
-        console.log('[MindAR] Alvo perdido.');
         if (!arVideo.paused) arVideo.pause();
         btnPlay.style.display = 'none';
         hintEl.classList.remove('hidden');
       });
 
-      /* ── Clique em TOCAR VÍDEO ──────────────────────── */
+      /* ── Tocar vídeo ──────────────────────────────────── */
       btnPlay.addEventListener('click', () => {
-        // Remove o mudo ANTES do play (restaura áudio após gesto do usuário)
-        arVideo.muted = false;
+        arVideo.muted = false; // restaura áudio após gesto do usuário
 
         arVideo.play()
           .then(() => {
-            console.log('[AR] Vídeo iniciado.');
-            /*
-              Força atualização da textura WebGL após play().
-              Em alguns mobile o Three.js não detecta automaticamente
-              que o vídeo começou a tocar.
-            */
-            const planeEl = document.getElementById('ar-video-plane');
-            if (planeEl && planeEl.components && planeEl.components.material) {
-              const mat = planeEl.components.material.material;
-              if (mat && mat.map) mat.map.needsUpdate = true;
+            // Força atualização da textura WebGL no Three.js
+            const aVideoEl = document.getElementById('ar-video-el');
+            if (aVideoEl?.components?.material?.material?.map) {
+              aVideoEl.components.material.material.map.needsUpdate = true;
             }
           })
-          .catch(err => console.warn('[AR] Erro ao reproduzir:', err));
+          .catch(err => {
+            console.warn('[AR] Erro ao reproduzir vídeo:', err);
+            // Tenta novamente com mudo (fallback)
+            arVideo.muted = true;
+            arVideo.play().catch(() => {});
+          });
 
         btnPlay.style.display = 'none';
       });
