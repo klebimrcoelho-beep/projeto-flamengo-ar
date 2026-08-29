@@ -310,6 +310,7 @@
           webkit-playsinline
           muted
           preload="auto"
+          loop
         ></video>
       </a-assets>
 
@@ -423,24 +424,47 @@
 
       /* ── Tocar vídeo ──────────────────────────────────── */
       btnPlay.addEventListener('click', () => {
-        arVideo.muted = false; // restaura áudio após gesto do usuário
-
-        arVideo.play()
-          .then(() => {
-            // Força atualização da textura WebGL no Three.js
-            const aVideoEl = document.getElementById('ar-video-el');
-            if (aVideoEl?.components?.material?.material?.map) {
-              aVideoEl.components.material.material.map.needsUpdate = true;
-            }
-          })
-          .catch(err => {
-            console.warn('[AR] Erro ao reproduzir vídeo:', err);
-            // Tenta novamente com mudo (fallback)
-            arVideo.muted = true;
-            arVideo.play().catch(() => {});
-          });
-
         btnPlay.style.display = 'none';
+
+        /*
+          ORDEM CORRETA PARA MOBILE:
+          1. load()  — força carregamento (mobile ignora preload=auto)
+          2. play()  — toca ainda MUDO (gesto do usuário garante sucesso)
+          3. .then() — dentro do then, desmuta (gesto ainda válido)
+          Inverter a ordem (muted=false antes de play) invalida
+          o token de gesto e faz o play() falhar silenciosamente.
+        */
+        arVideo.load(); // garante que o vídeo foi carregado
+
+        const doPlay = () => {
+          arVideo.play()
+            .then(() => {
+              // Desmuta DEPOIS do play bem-sucedido
+              arVideo.muted = false;
+
+              // Força atualização da textura WebGL no Three.js
+              // VideoTexture precisa de needsUpdate=true após play() em mobile
+              const aVideoEl = document.getElementById('ar-video-el');
+              if (aVideoEl?.components?.material?.material?.map) {
+                aVideoEl.components.material.material.map.needsUpdate = true;
+              }
+
+              console.log('[AR] Vídeo iniciado com sucesso.');
+            })
+            .catch(err => {
+              console.warn('[AR] Falha no play, tentando mudo:', err);
+              // Fallback: toca mudo se não conseguir com áudio
+              arVideo.muted = true;
+              arVideo.play().catch(e => console.error('[AR] Falha total:', e));
+            });
+        };
+
+        // Se vídeo já tem dados, toca direto; caso contrário espera carregar
+        if (arVideo.readyState >= 2) {
+          doPlay();
+        } else {
+          arVideo.addEventListener('canplay', doPlay, { once: true });
+        }
       });
     </script>
 
