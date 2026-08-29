@@ -6,21 +6,10 @@
     <meta name="description" content="Experiência de Realidade Aumentada — aponte a câmera para a imagem alvo e veja o conteúdo ganhar vida." />
     <title>WebAR — Realidade Aumentada</title>
 
-    <!-- ═══════════════════════════════════════════════════
-         CDN — A-Frame 1.4.2 (estável mobile) + MindAR 1.2.5
-    ════════════════════════════════════════════════════ -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
-      /* ═══════════════════════════════════
-         Reset base — fonte sans-serif obrigatória
-         IMPORTANTE: NÃO sobrescrever posicionamento do
-         <a-scene> nem do <video> interno do MindAR.
-         O MindAR injeta um <video> para o feed da câmera
-         e posiciona ele internamente — qualquer override
-         de CSS nesse elemento causa tela preta.
-      ═══════════════════════════════════ */
       *, *::before, *::after {
         box-sizing: border-box;
         margin: 0;
@@ -30,22 +19,122 @@
       html, body {
         width: 100%;
         height: 100%;
-        /* overflow hidden APENAS no body, não interfere com
-           o canvas/video do MindAR que ficam no documento */
-        background: #000;
+        background: #0a0a0f;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        overflow: hidden;
+      }
+
+      /* ─────────────────────────────────────────
+         TELA DE INÍCIO — cobre tudo antes de o AR
+         ser iniciado. Resolve o problema de tela
+         preta causado por autoStart em mobile.
+      ───────────────────────────────────────── */
+      #start-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 28px;
+        padding: 40px 32px;
+        background: radial-gradient(
+          ellipse at 60% 30%,
+          rgba(124, 58, 237, 0.22) 0%,
+          rgba(10, 10, 15, 0.98) 70%
+        );
+        text-align: center;
+      }
+
+      #start-screen .logo-ring {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #7c3aed, #db2777);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.8rem;
+        box-shadow:
+          0 0 0 8px rgba(124, 58, 237, 0.15),
+          0 0 0 16px rgba(124, 58, 237, 0.07);
+        animation: ring-pulse 3s ease-in-out infinite;
+      }
+
+      @keyframes ring-pulse {
+        0%, 100% { box-shadow: 0 0 0 8px rgba(124,58,237,0.15), 0 0 0 16px rgba(124,58,237,0.07); }
+        50%       { box-shadow: 0 0 0 14px rgba(219,39,119,0.20), 0 0 0 26px rgba(219,39,119,0.06); }
+      }
+
+      #start-screen h1 {
+        font-size: 1.55rem;
+        font-weight: 800;
+        color: #fff;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+
+      #start-screen p {
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.60);
+        line-height: 1.6;
+        max-width: 280px;
         font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
       }
 
-      /* ═══════════════════════════════════
-         ⚠️  NÃO aplicar position/inset/width/height
-         no seletor a-scene — isso quebra o feed de câmera
-         do MindAR em dispositivos móveis.
-      ═══════════════════════════════════ */
+      #btn-start-ar {
+        margin-top: 8px;
+        padding: 18px 52px;
+        border: none;
+        border-radius: 50px;
+        background: linear-gradient(135deg, #7c3aed 0%, #db2777 100%);
+        color: #fff;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        cursor: pointer;
+        box-shadow: 0 8px 30px rgba(124, 58, 237, 0.55);
+        transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s ease;
+      }
 
-      /* ═══════════════════════════════════
-         Camada de UI sobreposta — z-index alto,
-         pointer-events desativado para não bloquear toque na cena
-      ═══════════════════════════════════ */
+      #btn-start-ar:active {
+        transform: scale(0.95);
+      }
+
+      #btn-start-ar:hover {
+        transform: scale(1.05);
+        box-shadow: 0 12px 40px rgba(124, 58, 237, 0.70);
+      }
+
+      /* Loading spinner após clicar em Iniciar */
+      #start-screen.loading #btn-start-ar {
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      #loading-msg {
+        display: none;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.50);
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        animation: fade-blink 1.4s ease-in-out infinite;
+      }
+
+      #start-screen.loading #loading-msg {
+        display: block;
+      }
+
+      @keyframes fade-blink {
+        0%, 100% { opacity: 0.4; }
+        50%       { opacity: 1; }
+      }
+
+      /* ─────────────────────────────────────────
+         UI AR — visível DEPOIS que o AR inicia
+      ───────────────────────────────────────── */
       #ui-overlay {
         position: fixed;
         inset: 0;
@@ -58,98 +147,119 @@
         padding-bottom: 48px;
       }
 
-      /* ═══════════════════════════════════
-         Botão "Tocar Vídeo" — inicialmente oculto
-      ═══════════════════════════════════ */
       #btn-play {
         display: none;
         pointer-events: all;
         cursor: pointer;
-
         padding: 16px 44px;
         border: none;
         border-radius: 50px;
-
         background: linear-gradient(135deg, #7c3aed 0%, #db2777 100%);
         color: #fff;
-
         font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
         font-size: 1.1rem;
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-
-        box-shadow:
-          0 8px 32px rgba(124, 58, 237, 0.55),
-          0 2px 8px rgba(0, 0, 0, 0.35);
-
-        transition:
-          transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
-          box-shadow 0.18s ease,
-          opacity 0.25s ease;
-
+        box-shadow: 0 8px 32px rgba(124, 58, 237, 0.55), 0 2px 8px rgba(0,0,0,0.35);
+        transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s ease;
         animation: pulse-glow 2.4s ease-in-out infinite;
       }
 
-      #btn-play:hover {
-        transform: scale(1.07);
-        box-shadow:
-          0 14px 40px rgba(124, 58, 237, 0.70),
-          0 4px 12px rgba(0, 0, 0, 0.40);
-      }
-
-      #btn-play:active {
-        transform: scale(0.96);
-      }
-
-      #btn-play::before {
-        content: "▶  ";
-        font-size: 0.95em;
-      }
+      #btn-play::before { content: "▶  "; font-size: 0.95em; }
+      #btn-play:hover   { transform: scale(1.07); }
+      #btn-play:active  { transform: scale(0.96); }
 
       @keyframes pulse-glow {
-        0%, 100% { box-shadow: 0 8px 32px rgba(124, 58, 237, 0.55), 0 2px 8px rgba(0,0,0,0.35); }
-        50%       { box-shadow: 0 12px 44px rgba(219, 39, 119, 0.75), 0 4px 14px rgba(0,0,0,0.40); }
+        0%, 100% { box-shadow: 0 8px 32px rgba(124,58,237,0.55), 0 2px 8px rgba(0,0,0,0.35); }
+        50%       { box-shadow: 0 12px 44px rgba(219,39,119,0.75), 0 4px 14px rgba(0,0,0,0.40); }
       }
 
-      /* ═══════════════════════════════════
-         Dica de instrução no topo
-      ═══════════════════════════════════ */
+      /* Dica no topo */
       #hint {
         position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
+        top: 0; left: 0; right: 0;
         z-index: 9998;
         padding: 14px 24px;
         text-align: center;
         font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
         font-size: 0.9rem;
         font-weight: 500;
-        color: rgba(255, 255, 255, 0.92);
+        color: rgba(255,255,255,0.92);
         letter-spacing: 0.02em;
-        background: linear-gradient(
-          to bottom,
-          rgba(0, 0, 0, 0.72) 0%,
-          rgba(0, 0, 0, 0) 100%
-        );
+        background: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0) 100%);
         backdrop-filter: blur(4px);
         -webkit-backdrop-filter: blur(4px);
         transition: opacity 0.5s ease;
+        display: none; /* ocultado até o AR iniciar */
       }
 
-      #hint.hidden {
-        opacity: 0;
-        pointer-events: none;
+      #hint.hidden { opacity: 0; pointer-events: none; }
+
+      /* Mensagem de erro */
+      #error-msg {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        background: rgba(10,10,15,0.96);
+        color: #fff;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        font-size: 1rem;
+        text-align: center;
+        padding: 40px 32px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        line-height: 1.6;
+      }
+
+      #error-msg.visible { display: flex; }
+      #error-msg span { font-size: 2.5rem; }
+      #error-msg strong { font-size: 1.2rem; }
+      #error-msg button {
+        margin-top: 12px;
+        padding: 12px 32px;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 50px;
+        background: transparent;
+        color: #fff;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        font-size: 0.95rem;
+        cursor: pointer;
       }
     </style>
   </head>
 
   <body>
 
-    <!-- ═══════════════════════════════════════════════════
-         UI Overlay — fora da cena A-Frame
-    ════════════════════════════════════════════════════ -->
+    <!-- ══════════════════════════════════════════
+         TELA DE INÍCIO (exibida antes do AR)
+         O usuário DEVE interagir antes da câmera
+         iniciar — obrigatório para mobile.
+    ══════════════════════════════════════════ -->
+    <div id="start-screen">
+      <div class="logo-ring">📦</div>
+      <h1>Realidade Aumentada</h1>
+      <p>Aponte a câmera para a imagem do produto e veja a experiência ganhar vida.</p>
+      <button id="btn-start-ar">🎬 Iniciar AR</button>
+      <span id="loading-msg">Abrindo câmera…</span>
+    </div>
+
+    <!-- ══════════════════════════════════════════
+         TELA DE ERRO (caso câmera falhe)
+    ══════════════════════════════════════════ -->
+    <div id="error-msg">
+      <span>⚠️</span>
+      <strong>Não foi possível acessar a câmera</strong>
+      <p id="error-detail">Verifique as permissões do navegador e certifique-se de estar usando HTTPS.</p>
+      <button onclick="location.reload()">↺ Tentar novamente</button>
+    </div>
+
+    <!-- ══════════════════════════════════════════
+         UI AR (aparece depois que o AR inicia)
+    ══════════════════════════════════════════ -->
     <div id="hint">📷 Aponte a câmera para a imagem alvo</div>
 
     <div id="ui-overlay">
@@ -158,28 +268,20 @@
       </button>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════
-         CENA AR — MindAR + A-Frame
-
-         CORREÇÕES DE TELA PRETA MOBILE:
-         ① REMOVIDO color-space="sRGB" — causava conflito de
-           contexto WebGL em Android/Chrome mobile
-         ② REMOVIDO renderer="colorManagement..." — o pipeline
-           físico interfere com o shader interno do MindAR
-         ③ NÃO há CSS sobrescrevendo position/size do a-scene
-           (o MindAR gerencia isso internamente)
-    ════════════════════════════════════════════════════ -->
+    <!-- ══════════════════════════════════════════
+         CENA AR
+         autoStart: false → a câmera SÓ inicia
+         após o usuário clicar em "Iniciar AR".
+         Isso é ESSENCIAL para mobile não bloquear
+         o acesso à câmera por falta de interação.
+    ══════════════════════════════════════════ -->
     <a-scene
-      mindar-image="imageTargetSrc: ./assets/alvo.mind; autoStart: true; uiScanning: yes;"
+      id="ar-scene"
+      mindar-image="imageTargetSrc: ./assets/alvo.mind; autoStart: false; uiScanning: yes;"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false"
+      renderer="alpha: true"
     >
-
-      <!-- ─── Assets ─────────────────────────────────────
-           • muted: obrigatório para contornar bloqueio de
-             autoplay do navegador mobile (evita congelamento)
-           • playsinline + webkit-playsinline: obrigatório iOS
-      ──────────────────────────────────────────────── -->
       <a-assets>
         <video
           id="ar-video"
@@ -192,13 +294,8 @@
         ></video>
       </a-assets>
 
-      <!-- ─── Câmera ──────────────────────────────────── -->
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- ─── Entidade Alvo (targetIndex: 0) ───────────
-           Ajuste width/height conforme a proporção do vídeo:
-           16:9 → height="0.5625" | 4:3 → height="0.75" | 1:1 → height="1"
-      ──────────────────────────────────────────────── -->
       <a-entity id="target-entity" mindar-image-target="targetIndex: 0">
         <a-video
           id="ar-video-plane"
@@ -209,28 +306,74 @@
           height="0.5625"
         ></a-video>
       </a-entity>
-
     </a-scene>
 
-    <!-- ═══════════════════════════════════════════════════
-         LÓGICA JAVASCRIPT
-    ════════════════════════════════════════════════════ -->
     <script>
       'use strict';
 
-      const btnPlay  = document.getElementById('btn-play');
-      const arVideo  = document.getElementById('ar-video');
-      const targetEl = document.getElementById('target-entity');
-      const hintEl   = document.getElementById('hint');
+      /* ── Referências ─────────────────────────────────── */
+      const startScreen  = document.getElementById('start-screen');
+      const btnStartAR   = document.getElementById('btn-start-ar');
+      const loadingMsg   = document.getElementById('loading-msg');
+      const errorMsg     = document.getElementById('error-msg');
+      const errorDetail  = document.getElementById('error-detail');
+      const hintEl       = document.getElementById('hint');
+      const btnPlay      = document.getElementById('btn-play');
+      const arVideo      = document.getElementById('ar-video');
+      const sceneEl      = document.getElementById('ar-scene');
+      const targetEl     = document.getElementById('target-entity');
 
-      // ── targetFound: imagem alvo detectada ────────────
+      /* ── Botão INICIAR AR ────────────────────────────────
+         autoStart: false → precisamos chamar arSystem.start()
+         manualmente após o clique do usuário.
+         Isso resolve o bloqueio de câmera em mobile.
+      ──────────────────────────────────────────────────── */
+      btnStartAR.addEventListener('click', () => {
+        // Mostra estado de carregamento
+        startScreen.classList.add('loading');
+
+        // Aguarda a cena carregar antes de pegar o sistema AR
+        const initAR = () => {
+          const arSystem = sceneEl.systems['mindar-image-system'];
+          if (!arSystem) {
+            // Cena ainda não carregou — tenta novamente em 300ms
+            setTimeout(initAR, 300);
+            return;
+          }
+          arSystem.start();
+        };
+
+        if (sceneEl.hasLoaded) {
+          initAR();
+        } else {
+          sceneEl.addEventListener('loaded', initAR, { once: true });
+        }
+      });
+
+      /* ── AR pronto: câmera inicializada com sucesso ───── */
+      sceneEl.addEventListener('arReady', () => {
+        console.log('[MindAR] AR pronto — câmera ativa.');
+        startScreen.style.display = 'none';
+        hintEl.style.display      = 'block';
+      });
+
+      /* ── AR com erro: câmera bloqueada ou falhou ────────  */
+      sceneEl.addEventListener('arError', (e) => {
+        console.error('[MindAR] Erro ao iniciar câmera:', e);
+        startScreen.style.display = 'none';
+        errorDetail.textContent   =
+          'Detalhes: ' + (e.detail?.message || 'Permissão negada ou câmera em uso por outro app.');
+        errorMsg.classList.add('visible');
+      });
+
+      /* ── targetFound: imagem alvo detectada ─────────────  */
       targetEl.addEventListener('targetFound', () => {
         console.log('[MindAR] Alvo encontrado.');
         hintEl.classList.add('hidden');
         btnPlay.style.display = 'block';
       });
 
-      // ── targetLost: imagem alvo perdida ───────────────
+      /* ── targetLost: imagem alvo perdida ────────────────  */
       targetEl.addEventListener('targetLost', () => {
         console.log('[MindAR] Alvo perdido.');
         if (!arVideo.paused) arVideo.pause();
@@ -238,23 +381,14 @@
         hintEl.classList.remove('hidden');
       });
 
-      // ── Clique no botão: desativar mudo → play → sumir ─
+      /* ── Clique no botão TOCAR VÍDEO ────────────────────  */
       btnPlay.addEventListener('click', () => {
-        // Desativa o mudo ANTES do play para restaurar o áudio
-        // após a interação do usuário (contorna política de autoplay)
-        arVideo.muted = false;
-
+        arVideo.muted = false; // Restaura áudio após interação do usuário
         arVideo.play()
-          .then(() => {
-            console.log('[AR] Vídeo iniciado com sucesso.');
-          })
-          .catch((err) => {
-            console.warn('[AR] Erro ao iniciar vídeo:', err);
-          });
-
+          .then(() => console.log('[AR] Vídeo iniciado.'))
+          .catch(err => console.warn('[AR] Erro ao reproduzir vídeo:', err));
         btnPlay.style.display = 'none';
       });
     </script>
-
   </body>
 </html>
